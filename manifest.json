@@ -1,0 +1,12 @@
+{
+  "name": "Zoc",
+  "short_name": "Zoc",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff",
+  "icons": [
+    { "src": "logo.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}
