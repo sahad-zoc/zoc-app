@@ -1,0 +1,536 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#ffffff">
+<title>Zoc</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="logo.png">
+<style>
+:root{
+  --bg:#ffffff; --card:#f7f7f7; --soft:#efefef; --line:#dbdbdb;
+  --text:#111111; --muted:#6b6b6b; --blue:#1a73e8; --red:#c5221f; --green:#137333;
+  --avatar:#e76f51;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--text);font-family:Arial,Helvetica,sans-serif}
+body{min-height:100vh;display:flex;justify-content:center}
+#app{width:100%;max-width:480px;min-height:100vh;position:relative;padding-bottom:calc(110px + env(safe-area-inset-bottom))}
+button,input,textarea{font:inherit;color:inherit}
+button{cursor:pointer;border:0;background:none}
+:focus-visible{outline:3px solid var(--blue);outline-offset:2px}
+.muted{color:var(--muted)}
+.center{text-align:center}
+.row{display:flex;align-items:center}
+.btn{min-height:52px;border-radius:26px;padding:0 24px;font-weight:700;font-size:15px;display:flex;align-items:center;justify-content:center;gap:10px;width:100%}
+.btn.primary{background:var(--blue);color:#fff}
+.btn.soft{background:var(--soft)}
+.btn.danger{background:#fce8e6;color:var(--red)}
+.btn[disabled]{opacity:.6}
+.iconbtn{width:44px;height:44px;border-radius:16px;background:var(--soft);display:flex;align-items:center;justify-content:center}
+.field{display:block;margin:0 0 12px}
+.field input,.field textarea{width:100%;min-height:54px;border:2px solid transparent;border-radius:18px;background:var(--soft);padding:0 20px;font-size:16px}
+.field textarea{padding:16px 20px;min-height:96px;resize:none;line-height:22px}
+.field input:focus,.field textarea:focus{border-color:var(--blue);outline:none;background:#fff}
+.edit-field{margin:0 16px 12px;padding:12px 18px;border-radius:20px;background:var(--card)}
+.edit-field label{display:block;font-size:12px;color:var(--muted)}
+.edit-field input,.edit-field textarea{width:100%;border:0;background:none;padding:6px 0 0;font-size:16px;outline:none;resize:none;line-height:22px}
+.hint{font-size:12px;margin-top:4px;min-height:16px}
+.err{color:var(--red);font-size:14px;min-height:20px;margin:4px 0 10px}
+
+/* auth */
+.auth{padding:56px 28px 40px}
+.logo-big{width:96px;height:96px;border-radius:28px;display:block;margin:0 auto 14px;box-shadow:0 6px 30px #00000033}
+.auth h1{font-size:30px;margin:0;text-align:center}
+.auth .sub{text-align:center;margin:6px 0 28px;font-size:14px}
+.tabs{display:flex;background:var(--soft);border-radius:22px;padding:4px;margin-bottom:20px}
+.tabs button{flex:1;min-height:44px;border-radius:18px;font-weight:700;font-size:14px;color:var(--muted)}
+.tabs button[aria-selected="true"]{background:#fff;color:var(--text);box-shadow:0 1px 4px #0002}
+
+/* top bar */
+.top{display:flex;align-items:center;justify-content:space-between;padding:20px 16px 8px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:24px}
+.brand img{width:38px;height:38px;border-radius:11px}
+.title{font-weight:700;font-size:18px}
+
+/* cards */
+.card{margin:12px 16px;border-radius:28px;background:var(--card);padding:24px}
+.avatar{width:104px;height:104px;border-radius:34px;background:var(--avatar);color:#fff;font-size:44px;font-weight:700;display:flex;align-items:center;justify-content:center;overflow:hidden;margin:0 auto 12px;position:relative}
+.avatar img{width:100%;height:100%;object-fit:cover}
+.stats{display:flex;justify-content:space-around;margin-top:16px;font-size:12px;color:var(--muted)}
+.stats b{display:block;font-size:18px;color:var(--text)}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:8px 16px}
+.tile{height:100px;border-radius:18px;background:var(--soft)}
+.tile.add{border:2px dashed var(--muted);display:flex;align-items:center;justify-content:center;background:none}
+
+/* nav */
+.nav{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom));width:calc(100% - 48px);max-width:432px;height:64px;border-radius:32px;background:#fff;border:1px solid var(--line);box-shadow:0 4px 20px #00000026;display:flex;justify-content:space-around;align-items:center}
+.nav button{width:48px;height:48px;border-radius:24px;display:flex;align-items:center;justify-content:center}
+.nav .plus{background:var(--blue)}
+.mini{width:26px;height:26px;border-radius:9px;background:var(--avatar);overflow:hidden;display:block}
+.mini img{width:100%;height:100%;object-fit:cover}
+
+/* sheet */
+.overlay{position:fixed;inset:0;background:#00000073;display:flex;align-items:flex-end;justify-content:center;z-index:20}
+.sheet{width:100%;max-width:480px;background:#fff;border-radius:28px 28px 0 0;padding:16px 0 calc(28px + env(safe-area-inset-bottom))}
+.sheet .grab{width:40px;height:4px;border-radius:2px;background:var(--line);margin:0 auto 12px}
+.srow{display:flex;align-items:center;gap:16px;padding:10px 20px;width:100%;text-align:left;font-weight:700;font-size:16px}
+.srow .ic{width:48px;height:48px;border-radius:16px;background:var(--soft);display:flex;align-items:center;justify-content:center}
+.srow.danger{color:var(--red)}
+.srow.danger .ic{background:#fce8e6}
+
+
+/* saved accounts */
+.accrow{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.acc{flex:1;min-height:72px;border-radius:24px;background:var(--card);display:flex;align-items:center;gap:14px;padding:10px 14px;text-align:left}
+.acc .av{width:52px;height:52px;border-radius:18px;background:var(--avatar);color:#fff;font-weight:700;font-size:22px;display:flex;align-items:center;justify-content:center;overflow:hidden;flex:none}
+.acc .av img{width:100%;height:100%;object-fit:cover}
+.acc b{display:block;font-size:16px}
+.acc span.u{font-size:13px;color:var(--muted)}
+.notice{background:#e8f0fe;color:#174ea6;border-radius:16px;padding:12px 16px;font-size:14px;margin-bottom:16px}
+.link{color:var(--blue);font-weight:700;font-size:14px;min-height:44px}
+.srow .tick{margin-left:auto}
+
+#toast{position:fixed;left:50%;bottom:calc(100px + env(safe-area-inset-bottom));transform:translateX(-50%);background:#111;color:#fff;padding:12px 18px;border-radius:20px;font-size:14px;opacity:0;pointer-events:none;transition:opacity .2s;z-index:30;max-width:90%;text-align:center}
+#toast.show{opacity:1}
+.loading{padding:40vh 0 0;text-align:center;color:var(--muted)}
+@media (prefers-reduced-motion:reduce){#toast{transition:none}}
+</style>
+</head>
+<body>
+<div id="app"><div class="loading">Loading…</div></div>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-app.js";
+import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, sendPasswordResetEmail }
+  from "https://www.gstatic.com/firebasejs/13.4.0/firebase-auth.js";
+import { getFirestore, doc, getDoc, writeBatch, serverTimestamp }
+  from "https://www.gstatic.com/firebasejs/13.4.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCSiO5G6TaD7Oj6l4Oe2hWoVBssnH3oRzg",
+  authDomain: "zoc-messenger-2805d.firebaseapp.com",
+  projectId: "zoc-messenger-2805d",
+  storageBucket: "zoc-messenger-2805d.firebasestorage.app",
+  messagingSenderId: "398576157371",
+  appId: "1:398576157371:web:cbec0162a1861bc45c1f9e"
+};
+
+/* ---------- saved accounts (each account has its own Firebase session) ---------- */
+const ACC_KEY = "zoc.accounts", ACT_KEY = "zoc.active";
+const lsGet = k => { try { return localStorage.getItem(k); } catch { return null; } };
+const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch {} };
+let accounts = []; try { accounts = JSON.parse(lsGet(ACC_KEY) || "[]"); } catch { accounts = []; }
+let activeSlot = lsGet(ACT_KEY) || "";
+const saveAcc = () => lsSet(ACC_KEY, JSON.stringify(accounts));
+const slotId = () => "s" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+
+const insts = {};
+function inst(slot) {
+  if (!insts[slot]) { const a = initializeApp(firebaseConfig, slot); insts[slot] = { auth: getAuth(a), db: getFirestore(a) }; }
+  return insts[slot];
+}
+let auth, db;
+function use(slot) { const i = inst(slot); auth = i.auth; db = i.db; activeSlot = slot; lsSet(ACT_KEY, slot); }
+async function authReady(a) {
+  if (typeof a.authStateReady === "function") return a.authStateReady();
+  return new Promise(r => { const u = onAuthStateChanged(a, () => { u(); r(); }); });
+}
+function upsertAcc(slot, p) {
+  accounts.filter(a => a.uid === p.uid && a.slot !== slot).forEach(a => signOut(inst(a.slot).auth).catch(() => {}));
+  accounts = accounts.filter(a => a.slot === slot || a.uid !== p.uid);
+  const entry = { slot, uid: p.uid, name: p.name, username: p.username, photo: p.photo || "" };
+  const i = accounts.findIndex(a => a.slot === slot);
+  if (i >= 0) accounts[i] = entry; else accounts.push(entry);
+  saveAcc();
+}
+
+/* ---------- state ---------- */
+let me = null;            // active account profile
+let view = "home";        // home | profile | edit | auth
+let authMode = "login";   // chooser | login | signup
+let pendingSlot = "";     // account whose session expired
+let prefill = "", notice = "";
+let prevSlot = "";        // when adding a second account
+let ready = false;
+const $app = document.getElementById("app");
+
+/* ---------- helpers ---------- */
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+const ic = (p, size = 24, color = "#111111", label = "") =>
+  `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ${label ? `role="img" aria-label="${label}"` : 'aria-hidden="true"'}>${p}</svg>`;
+const P = {
+  home: '<path d="M3 11l9-8 9 8v10H3z"/>',
+  search: '<circle cx="11" cy="11" r="7"/><path d="M21 21l-5-5"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  chat: '<path d="M21 12a8 8 0 01-11.5 7.2L3 21l1.8-6A8 8 0 1121 12z"/>',
+  menu: '<path d="M4 7h16M4 12h16M4 17h16"/>',
+  x: '<path d="M6 6l12 12M18 6L6 18"/>',
+  back: '<path d="M15 5l-7 7 7 7"/>',
+  check: '<path d="M5 12l5 5 9-10"/>',
+  cam: '<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>',
+  edit: '<path d="M4 20l4-1L19 8l-3-3L5 16z"/>',
+  out: '<path d="M9 4H5a2 2 0 00-2 2v12a2 2 0 002 2h4M16 8l4 4-4 4M20 12H9"/>',
+  swap: '<path d="M7 4L3 8l4 4M3 8h14M17 20l4-4-4-4M21 16H7"/>'
+};
+function toast(msg) {
+  const t = document.getElementById("toast");
+  t.textContent = msg; t.classList.add("show");
+  clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove("show"), 2600);
+}
+const ERR = {
+  "auth/email-already-in-use": "This account already exists. Log in instead.",
+  "auth/invalid-email": "Enter a valid username or email.",
+  "auth/weak-password": "Password needs at least 6 characters.",
+  "auth/invalid-credential": "Wrong username or password.",
+  "auth/user-not-found": "No account found.",
+  "auth/wrong-password": "Wrong username or password.",
+  "auth/too-many-requests": "Too many attempts. Try again in a few minutes.",
+  "auth/network-request-failed": "No internet connection.",
+  "permission-denied": "Not allowed. Log out, log in again and retry."
+};
+const errMsg = e => ERR[e.code] || e.message || "Something went wrong. Try again.";
+const USER_RE = /^[a-z0-9_.]{3,20}$/;
+function usernameProblem(u) {
+  if (!USER_RE.test(u)) return "Use 3–20 letters, numbers, dots or underscores.";
+  if (u.startsWith(".") || u.endsWith(".") || u.includes("..")) return "Dots can’t be at the start, end or doubled.";
+  return "";
+}
+async function usernameTaken(u) { return (await getDoc(doc(db, "usernames", u))).exists(); }
+const randHex = () => Array.from(crypto.getRandomValues(new Uint8Array(8)), b => b.toString(16).padStart(2, "0")).join("");
+
+function compressImage(file, size = 320) {
+  return new Promise((resolve, reject) => {
+    const img = new Image(), url = URL.createObjectURL(file);
+    img.onload = () => {
+      const s = Math.min(img.width, img.height);
+      const c = document.createElement("canvas"); c.width = c.height = size;
+      c.getContext("2d").drawImage(img, (img.width - s) / 2, (img.height - s) / 2, s, s, 0, 0, size, size);
+      URL.revokeObjectURL(url); resolve(c.toDataURL("image/jpeg", 0.8));
+    };
+    img.onerror = () => reject(new Error("Couldn’t read this photo."));
+    img.src = url;
+  });
+}
+const avatarHTML = u => u?.photo
+  ? `<img src="${u.photo}" alt="${esc(u.name)}">`
+  : esc((u?.name || "?").trim().charAt(0).toUpperCase());
+
+/* ---------- data ---------- */
+async function loadProfile(uid) {
+  const s = await getDoc(doc(db, "users", uid));
+  return s.exists() ? s.data() : null;
+}
+// username -> hidden login id (the email field of the Firebase account).
+async function resolveLoginId(input) {
+  input = input.trim().toLowerCase();
+  if (!input) throw new Error("Enter your username.");
+  if (input.includes("@")) return input;                    // older accounts: email login
+  const s = await getDoc(doc(db, "usernames", input));
+  if (!s.exists()) throw new Error("No account with this username.");
+  const id = s.data().loginId;
+  if (!id) throw new Error("This account was made with an email. Log in with your email.");
+  return id;
+}
+async function finishLogin(slot) {
+  me = await loadProfile(auth.currentUser.uid);
+  if (!me) { await signOut(auth).catch(() => {}); throw new Error("This account has no profile."); }
+  upsertAcc(slot, me); pendingSlot = ""; prefill = ""; notice = ""; view = "home";
+}
+async function logIn(input, pw) {
+  const slot = pendingSlot || slotId(); use(slot);
+  const id = await resolveLoginId(input);
+  await signInWithEmailAndPassword(auth, id, pw);
+  await finishLogin(slot);
+}
+async function signUp(name, username, pw) {
+  username = username.toLowerCase().trim(); name = name.trim();
+  if (!name) throw new Error("Enter your name.");
+  const bad = usernameProblem(username); if (bad) throw new Error(bad);
+  if (pw.length < 6) throw new Error("Password needs at least 6 characters.");
+  const slot = slotId(); use(slot);
+  if (await usernameTaken(username)) throw new Error("This username is taken. Try another.");
+  const loginId = "u" + randHex() + "@zoc.invalid";
+  const cred = await createUserWithEmailAndPassword(auth, loginId, pw);
+  const uid = cred.user.uid;
+  try {
+    const b = writeBatch(db);
+    b.set(doc(db, "usernames", username), { uid, username, loginId });
+    b.set(doc(db, "users", uid), { uid, name, username, loginId, bio: "", photo: "", followersCount: 0, postsCount: 0, createdAt: serverTimestamp() });
+    await b.commit();
+  } catch (e) { await cred.user.delete().catch(() => {}); throw e; }
+  me = { uid, name, username, loginId, bio: "", photo: "", followersCount: 0, postsCount: 0 };
+  upsertAcc(slot, me); pendingSlot = ""; view = "home";
+}
+async function saveProfile({ name, username, bio, photo }) {
+  const uid = auth.currentUser.uid, b = writeBatch(db);
+  if (username !== me.username) {
+    if (await usernameTaken(username)) throw new Error("This username is taken. Try another.");
+    b.delete(doc(db, "usernames", me.username));
+    b.set(doc(db, "usernames", username), me.loginId ? { uid, username, loginId: me.loginId } : { uid, username });
+  }
+  b.set(doc(db, "users", uid), { name, username, bio, photo }, { merge: true });
+  await b.commit();
+  me = { ...me, name, username, bio, photo };
+  upsertAcc(activeSlot, me);
+}
+async function switchTo(slot) {
+  const a = accounts.find(x => x.slot === slot); if (!a) return;
+  try {
+    use(slot); await authReady(auth);
+    if (!auth.currentUser) {
+      pendingSlot = slot; prefill = a.username; authMode = "login"; view = "auth";
+      notice = "Your session ended. Enter the password for @" + a.username + ".";
+      return render();
+    }
+    const p = await loadProfile(auth.currentUser.uid);
+    if (!p) throw new Error("Couldn’t load this account.");
+    me = p; upsertAcc(slot, me); view = "home"; render(); window.scrollTo(0, 0);
+  } catch (e) { toast(errMsg(e)); }
+}
+function removeAccount(slot) {
+  const a = accounts.find(x => x.slot === slot); if (!a) return;
+  if (!confirm("Remove @" + a.username + " from this device? You can log in again anytime.")) return;
+  signOut(inst(slot).auth).catch(() => {});
+  accounts = accounts.filter(x => x.slot !== slot); saveAcc();
+  if (!accounts.length) authMode = "login";
+  render();
+}
+async function logOutCurrent() {
+  const slot = activeSlot;
+  await signOut(auth).catch(() => {});
+  accounts = accounts.filter(a => a.slot !== slot); saveAcc();
+  me = null; activeSlot = ""; lsSet(ACT_KEY, ""); view = "home";
+  authMode = accounts.length ? "chooser" : "login"; render();
+}
+function addAccount() { prevSlot = activeSlot; pendingSlot = ""; prefill = ""; notice = ""; authMode = "login"; view = "auth"; render(); }
+function cancelAdd() { if (prevSlot) use(prevSlot); view = "home"; render(); }
+
+/* ---------- views ---------- */
+function render() {
+  if (!ready) return;
+  if (!me || view === "auth") return renderAuth();
+  if (view === "edit") return renderEdit();
+  renderShell(view === "profile" ? profileHTML() : homeHTML());
+}
+
+function accAvatar(a) { return a.photo ? `<img src="${a.photo}" alt="">` : esc((a.name || "?").charAt(0).toUpperCase()); }
+
+function renderAuth() {
+  if (authMode === "chooser" && !accounts.length) authMode = "login";
+  const mode = authMode, signup = mode === "signup";
+  const adding = !!me && view === "auth";
+  const head = `
+    ${adding ? `<button class="iconbtn" id="cancelAdd" aria-label="Back">${ic(P.back)}</button>` : ""}
+    <img class="logo-big" src="logo.png" alt="Zoc logo"><h1>Zoc</h1>`;
+  if (mode === "chooser") {
+    $app.innerHTML = `<div class="auth">${head}
+      <p class="sub muted">Choose an account to continue</p>
+      ${accounts.map(a => `
+        <div class="accrow">
+          <button class="acc" data-slot="${a.slot}"><span class="av">${accAvatar(a)}</span><span><b>${esc(a.name)}</b><span class="u">@${esc(a.username)}</span></span></button>
+          <button class="iconbtn" data-rm="${a.slot}" aria-label="Remove @${esc(a.username)}">${ic(P.x)}</button>
+        </div>`).join("")}
+      <div style="margin-top:20px"><button class="btn primary" id="toLogin">Log in to another account</button></div>
+      <p class="center"><button class="link" id="toSignup">Create new account</button></p>
+    </div>`;
+    $app.querySelectorAll("[data-slot]").forEach(b => b.onclick = () => switchTo(b.dataset.slot));
+    $app.querySelectorAll("[data-rm]").forEach(b => b.onclick = () => removeAccount(b.dataset.rm));
+    document.getElementById("toLogin").onclick = () => { authMode = "login"; pendingSlot = ""; prefill = ""; notice = ""; render(); };
+    document.getElementById("toSignup").onclick = () => { authMode = "signup"; render(); };
+    return;
+  }
+  $app.innerHTML = `<div class="auth">${head}
+    <p class="sub muted">Share moments. Chat instantly.</p>
+    ${notice ? `<div class="notice" role="status">${esc(notice)}</div>` : ""}
+    <div class="tabs" role="tablist">
+      <button role="tab" aria-selected="${!signup}" data-mode="login">Log in</button>
+      <button role="tab" aria-selected="${signup}" data-mode="signup">Sign up</button>
+    </div>
+    <form id="authForm" novalidate>
+      ${signup ? `
+      <label class="field"><input id="fName" placeholder="Name" aria-label="Name" autocomplete="name" maxlength="40"></label>
+      <label class="field"><input id="fUser" placeholder="Username" aria-label="Username" autocomplete="username" autocapitalize="none" maxlength="20"></label>` : `
+      <label class="field"><input id="fUser" placeholder="Username" aria-label="Username" autocomplete="username" autocapitalize="none" value="${esc(prefill)}"></label>`}
+      <label class="field"><input id="fPass" type="password" placeholder="Password" aria-label="Password" autocomplete="${signup ? "new-password" : "current-password"}"></label>
+      <div class="err" id="err" role="alert"></div>
+      <button class="btn primary" id="go" type="submit">${signup ? "Sign up" : "Log in"}</button>
+    </form>
+    ${signup ? "" : `<p class="center"><button id="forgot" class="muted" style="font-size:14px;min-height:44px">Forgot password?</button></p>`}
+    ${!adding && accounts.length ? `<p class="center"><button class="link" id="toChooser">Choose a saved account</button></p>` : ""}
+  </div>`;
+  $app.querySelectorAll("[data-mode]").forEach(b => b.onclick = () => { authMode = b.dataset.mode; if (authMode === "signup") { pendingSlot = ""; notice = ""; } render(); });
+  const ca = document.getElementById("cancelAdd"); if (ca) ca.onclick = cancelAdd;
+  const tc = document.getElementById("toChooser"); if (tc) tc.onclick = () => { authMode = "chooser"; pendingSlot = ""; notice = ""; render(); };
+  const err = document.getElementById("err"), go = document.getElementById("go");
+  document.getElementById("authForm").onsubmit = async ev => {
+    ev.preventDefault(); err.textContent = ""; go.disabled = true; go.textContent = "Please wait…";
+    const user = document.getElementById("fUser").value, pw = document.getElementById("fPass").value;
+    try {
+      if (signup) await signUp(document.getElementById("fName").value, user, pw);
+      else await logIn(user, pw);
+      render(); window.scrollTo(0, 0);
+    } catch (e) { err.textContent = errMsg(e); go.disabled = false; go.textContent = signup ? "Sign up" : "Log in"; }
+  };
+  const f = document.getElementById("forgot");
+  if (f) f.onclick = async () => {
+    const v = document.getElementById("fUser").value.trim();
+    if (v.includes("@")) {
+      try { use(slotId()); await sendPasswordResetEmail(auth, v); toast("Reset link sent. Check your email."); }
+      catch (e) { err.textContent = errMsg(e); }
+    } else toast("Password reset works only for accounts made with an email.");
+  };
+}
+
+function homeHTML() {
+  return `
+  <div class="top"><div class="brand"><img src="logo.png" alt="">Zoc</div></div>
+  <div class="card center">
+    <div class="avatar">${avatarHTML(me)}</div>
+    <div class="title">Welcome, ${esc(me.name)}</div>
+    <p class="muted" style="font-size:14px;line-height:21px">Your feed will appear here once posts are added in the next step.</p>
+    <button class="btn primary" data-go="edit">Edit profile</button>
+  </div>`;
+}
+
+function profileHTML() {
+  return `
+  <div class="top"><div class="title">@${esc(me.username)}</div>
+    <button class="iconbtn" id="menuBtn" aria-label="Menu">${ic(P.menu, 24, "#111111")}</button></div>
+  <div class="card center">
+    <div class="avatar">${avatarHTML(me)}</div>
+    <div class="title" style="font-size:20px">${esc(me.name)}</div>
+    <div class="muted" style="font-size:13px;margin:4px 0">@${esc(me.username)}</div>
+    <div style="font-size:14px;line-height:21px;margin-top:8px;white-space:pre-wrap">${me.bio ? esc(me.bio) : '<span class="muted">No bio yet</span>'}</div>
+    <div class="stats"><div><b>${me.postsCount || 0}</b>Posts</div><div><b>${me.followersCount || 0}</b>Followers</div></div>
+  </div>
+  <div style="padding:0 16px"><button class="btn primary" data-go="edit">Edit profile</button></div>
+  <div class="grid">
+    <button class="tile add" data-soon aria-label="Add photo">${ic(P.plus, 32, "#111111")}</button>
+    <div class="tile"></div><div class="tile"></div><div class="tile"></div><div class="tile"></div><div class="tile"></div>
+  </div>`;
+}
+
+function renderShell(inner) {
+  const on = n => (view === n ? "#1a73e8" : "#111111");
+  $app.innerHTML = inner + `
+  <nav class="nav" aria-label="Main">
+    <button data-go="home" aria-label="Home">${ic(P.home, 26, on("home"))}</button>
+    <button data-soon aria-label="Search">${ic(P.search, 26, "#111111")}</button>
+    <button class="plus" data-soon aria-label="Create">${ic(P.plus, 24, "#ffffff")}</button>
+    <button data-soon aria-label="Chats">${ic(P.chat, 26, "#111111")}</button>
+    <button data-go="profile" aria-label="Profile"><span class="mini">${me.photo ? `<img src="${me.photo}" alt="">` : ""}</span></button>
+  </nav>`;
+  $app.querySelectorAll("[data-go]").forEach(b => b.onclick = () => { view = b.dataset.go; render(); window.scrollTo(0, 0); });
+  $app.querySelectorAll("[data-soon]").forEach(b => b.onclick = () => toast("Coming in the next step"));
+  const m = document.getElementById("menuBtn"); if (m) m.onclick = openMenu;
+}
+
+function sheet(html) {
+  const o = document.createElement("div"); o.className = "overlay";
+  o.innerHTML = `<div class="sheet" role="dialog"><div class="grab"></div>${html}</div>`;
+  document.body.appendChild(o);
+  const close = () => o.remove();
+  o.onclick = e => { if (e.target === o) close(); };
+  return { o, close };
+}
+function openMenu() {
+  const { o, close } = sheet(`
+    <button class="srow" id="mEdit"><span class="ic">${ic(P.edit)}</span>Edit profile</button>
+    <button class="srow" id="mSwitch"><span class="ic">${ic(P.swap)}</span>Switch account</button>
+    <button class="srow danger" id="mOut"><span class="ic">${ic(P.out, 24, "#c5221f")}</span>Log out</button>`);
+  o.querySelector("#mEdit").onclick = () => { close(); view = "edit"; render(); };
+  o.querySelector("#mSwitch").onclick = () => { close(); openSwitch(); };
+  o.querySelector("#mOut").onclick = async () => { close(); await logOutCurrent(); };
+}
+function openSwitch() {
+  const { o, close } = sheet(`
+    ${accounts.map(a => `<button class="srow" data-slot="${a.slot}">
+        <span class="ic" style="overflow:hidden;background:var(--avatar);color:#fff">${accAvatar(a)}</span>
+        <span>${esc(a.name)}<br><span class="muted" style="font-size:13px;font-weight:400">@${esc(a.username)}</span></span>
+        ${a.slot === activeSlot ? `<span class="tick">${ic(P.check, 24, "#1a73e8", "Current account")}</span>` : ""}
+      </button>`).join("")}
+    <button class="srow" id="sAdd"><span class="ic">${ic(P.plus)}</span>Add account</button>`);
+  o.querySelectorAll("[data-slot]").forEach(b => b.onclick = () => { close(); if (b.dataset.slot !== activeSlot) switchTo(b.dataset.slot); });
+  o.querySelector("#sAdd").onclick = () => { close(); addAccount(); };
+}
+
+function renderEdit() {
+  const ed = { name: me.name, username: me.username, bio: me.bio || "", photo: me.photo || "", ok: true };
+  $app.innerHTML = `
+  <div class="top">
+    <button class="iconbtn" id="cancel" aria-label="Cancel">${ic(P.x)}</button>
+    <div class="title">Edit profile</div>
+    <button class="iconbtn" id="save" aria-label="Save changes">${ic(P.check, 26, "#1a73e8")}</button>
+  </div>
+  <div class="center" style="margin:8px 0 20px">
+    <div class="avatar" id="av" style="overflow:visible"><span id="avIn" style="width:100%;height:100%;border-radius:34px;overflow:hidden;display:flex;align-items:center;justify-content:center">${avatarHTML(ed)}</span>
+      <label for="file" style="position:absolute;right:-6px;bottom:-6px;width:40px;height:40px;border-radius:14px;background:#1a73e8;border:3px solid #fff;display:flex;align-items:center;justify-content:center;cursor:pointer">${ic(P.cam, 20, "#ffffff", "Change photo")}</label>
+    </div>
+    <label for="file" style="color:#1a73e8;font-weight:700;font-size:14px;cursor:pointer">Change photo</label>
+    <input id="file" type="file" accept="image/*" hidden>
+    <div><button id="rmPhoto" class="muted" style="font-size:13px;min-height:44px" ${ed.photo ? "" : "hidden"}>Remove photo</button></div>
+  </div>
+  <div class="edit-field"><label for="eName">Name</label><input id="eName" maxlength="40" value="${esc(ed.name)}" autocomplete="name"></div>
+  <div class="edit-field"><label for="eUser">Username</label><input id="eUser" maxlength="20" autocapitalize="none" value="${esc(ed.username)}"><div class="hint" id="uhint"></div></div>
+  <div class="edit-field"><label for="eBio">Bio</label><textarea id="eBio" rows="3" maxlength="150">${esc(ed.bio)}</textarea><div class="hint muted" id="bcount" style="text-align:right"></div></div>
+  <div class="err" id="err" role="alert" style="margin:0 20px"></div>
+  <p class="muted" style="margin:0 28px;font-size:12px">Your name is shown in chats. Your username is how people find you and log in.</p>`;
+
+  const $ = id => document.getElementById(id), err = $("err"), hint = $("uhint");
+  const setPhotoUI = () => { $("avIn").innerHTML = avatarHTML(ed); $("rmPhoto").hidden = !ed.photo; };
+  const count = () => { $("bcount").textContent = $("eBio").value.length + "/150"; };
+  count(); $("eBio").oninput = count;
+
+  $("file").onchange = async e => {
+    const f = e.target.files[0]; if (!f) return;
+    try { ed.photo = await compressImage(f); setPhotoUI(); } catch (x) { err.textContent = x.message; }
+  };
+  $("rmPhoto").onclick = () => { ed.photo = ""; setPhotoUI(); };
+
+  let timer;
+  $("eUser").oninput = () => {
+    const u = $("eUser").value.toLowerCase().trim(); ed.ok = false; clearTimeout(timer);
+    if (u === me.username) { hint.textContent = "Your current username"; hint.style.color = "var(--muted)"; ed.ok = true; return; }
+    const bad = usernameProblem(u);
+    if (bad) { hint.textContent = bad; hint.style.color = "var(--red)"; return; }
+    hint.textContent = "Checking…"; hint.style.color = "var(--muted)";
+    timer = setTimeout(async () => {
+      try {
+        const taken = await usernameTaken(u);
+        if ($("eUser").value.toLowerCase().trim() !== u) return;
+        hint.textContent = taken ? "Taken" : "Available"; hint.style.color = taken ? "var(--red)" : "var(--green)"; ed.ok = !taken;
+      } catch { hint.textContent = "Couldn’t check. Try again."; hint.style.color = "var(--red)"; }
+    }, 500);
+  };
+
+  $("cancel").onclick = () => { view = "profile"; render(); };
+  $("save").onclick = async () => {
+    err.textContent = "";
+    const name = $("eName").value.trim(), username = $("eUser").value.toLowerCase().trim(), bio = $("eBio").value.trim();
+    if (!name) { err.textContent = "Enter your name."; return; }
+    const bad = usernameProblem(username); if (bad) { err.textContent = bad; return; }
+    if (username !== me.username && !ed.ok) { err.textContent = "Pick an available username."; return; }
+    $("save").disabled = true;
+    try { await saveProfile({ name, username, bio, photo: ed.photo }); toast("Profile saved"); view = "profile"; render(); }
+    catch (e) { err.textContent = errMsg(e); $("save").disabled = false; }
+  };
+}
+
+/* ---------- start ---------- */
+(async function boot() {
+  try {
+    const a = accounts.find(x => x.slot === activeSlot);
+    if (a) {
+      use(a.slot); await authReady(auth);
+      if (auth.currentUser) { me = await loadProfile(auth.currentUser.uid); if (me) upsertAcc(a.slot, me); }
+    }
+  } catch { me = null; }
+  authMode = accounts.length ? "chooser" : "login";
+  ready = true; render();
+})();
+</script>
+</body>
+</html>
