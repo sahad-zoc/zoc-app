@@ -199,6 +199,11 @@ function usernameProblem(u) {
   return "";
 }
 async function usernameTaken(u) { return (await getDoc(doc(db, "usernames", u))).exists(); }
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+async function sha256Hex(s) {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s.trim().toLowerCase()));
+  return Array.from(new Uint8Array(buf), b => b.toString(16).padStart(2, "0")).join("");
+}
 const randHex = () => Array.from(crypto.getRandomValues(new Uint8Array(8)), b => b.toString(16).padStart(2, "0")).join("");
 
 function compressImage(file, size = 320) {
@@ -223,11 +228,14 @@ async function loadProfile(uid) {
   const s = await getDoc(doc(db, "users", uid));
   return s.exists() ? s.data() : null;
 }
-// username -> hidden login id (the email field of the Firebase account).
+// username or email -> hidden login id (the email field of the Firebase account).
 async function resolveLoginId(input) {
   input = input.trim().toLowerCase();
-  if (!input) throw new Error("Enter your username.");
-  if (input.includes("@")) return input;                    // older accounts: email login
+  if (!input) throw new Error("Enter your username or email.");
+  if (input.includes("@")) {
+    const s = await getDoc(doc(db, "emails", await sha256Hex(input)));
+    return s.exists() ? s.data().loginId : input;            // older accounts: the email itself
+  }
   const s = await getDoc(doc(db, "usernames", input));
   if (!s.exists()) throw new Error("No account with this username.");
   const id = s.data().loginId;
@@ -245,19 +253,23 @@ async function logIn(input, pw) {
   await signInWithEmailAndPassword(auth, id, pw);
   await finishLogin(slot);
 }
-async function signUp(name, username, pw) {
-  username = username.toLowerCase().trim(); name = name.trim();
+async function signUp(name, username, email, pw) {
+  username = username.toLowerCase().trim(); name = name.trim(); email = email.trim().toLowerCase();
   if (!name) throw new Error("Enter your name.");
   const bad = usernameProblem(username); if (bad) throw new Error(bad);
+  if (!EMAIL_RE.test(email)) throw new Error("Enter a valid email address.");
   if (pw.length < 6) throw new Error("Password needs at least 6 characters.");
   const slot = slotId(); use(slot);
   if (await usernameTaken(username)) throw new Error("This username is taken. Try another.");
+  const emailKey = await sha256Hex(email);
+  if ((await getDoc(doc(db, "emails", emailKey))).exists()) throw new Error("This email is already used. Log in instead.");
   const loginId = "u" + randHex() + "@zoc.invalid";
   const cred = await createUserWithEmailAndPassword(auth, loginId, pw);
   const uid = cred.user.uid;
   try {
     const b = writeBatch(db);
     b.set(doc(db, "usernames", username), { uid, username, loginId });
+    b.set(doc(db, "emails", emailKey), { uid, loginId });
     b.set(doc(db, "users", uid), { uid, name, username, loginId, bio: "", photo: "", followersCount: 0, postsCount: 0, createdAt: serverTimestamp() });
     await b.commit();
   } catch (e) { await cred.user.delete().catch(() => {}); throw e; }
@@ -352,8 +364,9 @@ function renderAuth() {
     <form id="authForm" novalidate>
       ${signup ? `
       <label class="field"><input id="fName" placeholder="Name" aria-label="Name" autocomplete="name" maxlength="40"></label>
-      <label class="field"><input id="fUser" placeholder="Username" aria-label="Username" autocomplete="username" autocapitalize="none" maxlength="20"></label>` : `
-      <label class="field"><input id="fUser" placeholder="Username" aria-label="Username" autocomplete="username" autocapitalize="none" value="${esc(prefill)}"></label>`}
+      <label class="field"><input id="fUser" placeholder="Username" aria-label="Username" autocomplete="username" autocapitalize="none" maxlength="20"></label>
+      <label class="field"><input id="fEmail" type="email" placeholder="Email" aria-label="Email" autocomplete="email" autocapitalize="none"></label>` : `
+      <label class="field"><input id="fUser" placeholder="Username or email" aria-label="Username or email" autocomplete="username" autocapitalize="none" value="${esc(prefill)}"></label>`}
       <label class="field"><input id="fPass" type="password" placeholder="Password" aria-label="Password" autocomplete="${signup ? "new-password" : "current-password"}"></label>
       <div class="err" id="err" role="alert"></div>
       <button class="btn primary" id="go" type="submit">${signup ? "Sign up" : "Log in"}</button>
@@ -369,18 +382,20 @@ function renderAuth() {
     ev.preventDefault(); err.textContent = ""; go.disabled = true; go.textContent = "Please wait…";
     const user = document.getElementById("fUser").value, pw = document.getElementById("fPass").value;
     try {
-      if (signup) await signUp(document.getElementById("fName").value, user, pw);
+      if (signup) await signUp(document.getElementById("fName").value, user, document.getElementById("fEmail").value, pw);
       else await logIn(user, pw);
       render(); window.scrollTo(0, 0);
     } catch (e) { err.textContent = errMsg(e); go.disabled = false; go.textContent = signup ? "Sign up" : "Log in"; }
   };
   const f = document.getElementById("forgot");
   if (f) f.onclick = async () => {
-    const v = document.getElementById("fUser").value.trim();
-    if (v.includes("@")) {
-      try { use(slotId()); await sendPasswordResetEmail(auth, v); toast("Reset link sent. Check your email."); }
-      catch (e) { err.textContent = errMsg(e); }
-    } else toast("Password reset works only for accounts made with an email.");
+    const v = document.getElementById("fUser").value.trim().toLowerCase();
+    if (!v.includes("@")) { toast("Type your email in the first box, then tap Forgot password."); return; }
+    try {
+      use(slotId());
+      if ((await getDoc(doc(db, "emails", await sha256Hex(v)))).exists()) { toast("Password reset is not available yet for this account."); return; }
+      await sendPasswordResetEmail(auth, v); toast("Reset link sent. Check your email.");
+    } catch (e) { err.textContent = errMsg(e); }
   };
 }
 
