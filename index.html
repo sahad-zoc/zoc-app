@@ -89,6 +89,7 @@ button{cursor:pointer;border:0;background:none}
 .acc b{display:block;font-size:16px}
 .acc span.u{font-size:13px;color:var(--muted)}
 .notice{background:#e8f0fe;color:#174ea6;border-radius:16px;padding:12px 16px;font-size:14px;margin-bottom:16px}
+.pwwrap{position:relative}.pwwrap input{padding-right:60px!important}.pwbtn{position:absolute;right:6px;top:5px;width:44px;height:44px;border-radius:16px;display:flex;align-items:center;justify-content:center}
 .link{color:var(--blue);font-weight:700;font-size:14px;min-height:44px}
 .srow .tick{margin-left:auto}
 
@@ -173,7 +174,9 @@ const P = {
   cam: '<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>',
   edit: '<path d="M4 20l4-1L19 8l-3-3L5 16z"/>',
   out: '<path d="M9 4H5a2 2 0 00-2 2v12a2 2 0 002 2h4M16 8l4 4-4 4M20 12H9"/>',
-  swap: '<path d="M7 4L3 8l4 4M3 8h14M17 20l4-4-4-4M21 16H7"/>'
+  swap: '<path d="M7 4L3 8l4 4M3 8h14M17 20l4-4-4-4M21 16H7"/>',
+  eye: '<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+  eyeoff: '<path d="M3 3l18 18M10.6 6.1A10 10 0 0112 5c6 0 10 7 10 7a17 17 0 01-3.2 4M6.5 6.8C3.7 8.6 2 12 2 12s4 7 10 7c1.6 0 3-.4 4.2-1M9.9 9.9a3 3 0 004.2 4.2"/>'
 };
 function toast(msg) {
   const t = document.getElementById("toast");
@@ -239,7 +242,7 @@ async function resolveLoginId(input) {
   const s = await getDoc(doc(db, "usernames", input));
   if (!s.exists()) throw new Error("No account with this username.");
   const id = s.data().loginId;
-  if (!id) throw new Error("This account was made with an email. Log in with your email.");
+  if (!id) throw new Error("This is an older account that works only with its email. Type your email instead, or create a new account.");
   return id;
 }
 async function finishLogin(slot) {
@@ -367,7 +370,7 @@ function renderAuth() {
       <label class="field"><input id="fUser" placeholder="Username" aria-label="Username" autocomplete="username" autocapitalize="none" maxlength="20"></label>
       <label class="field"><input id="fEmail" type="email" placeholder="Email" aria-label="Email" autocomplete="email" autocapitalize="none"></label>` : `
       <label class="field"><input id="fUser" placeholder="Username or email" aria-label="Username or email" autocomplete="username" autocapitalize="none" value="${esc(prefill)}"></label>`}
-      <label class="field"><input id="fPass" type="password" placeholder="Password" aria-label="Password" autocomplete="${signup ? "new-password" : "current-password"}"></label>
+      <label class="field pwwrap"><input id="fPass" type="password" placeholder="Password" aria-label="Password" autocomplete="${signup ? "new-password" : "current-password"}"><button type="button" class="pwbtn" id="pwBtn" aria-label="Show password">${ic(P.eye, 24, "#6b6b6b")}</button></label>
       <div class="err" id="err" role="alert"></div>
       <button class="btn primary" id="go" type="submit">${signup ? "Sign up" : "Log in"}</button>
     </form>
@@ -377,6 +380,13 @@ function renderAuth() {
   $app.querySelectorAll("[data-mode]").forEach(b => b.onclick = () => { authMode = b.dataset.mode; if (authMode === "signup") { pendingSlot = ""; notice = ""; } render(); });
   const ca = document.getElementById("cancelAdd"); if (ca) ca.onclick = cancelAdd;
   const tc = document.getElementById("toChooser"); if (tc) tc.onclick = () => { authMode = "chooser"; pendingSlot = ""; notice = ""; render(); };
+  const pb = document.getElementById("pwBtn");
+  pb.onclick = () => {
+    const i = document.getElementById("fPass"), show = i.type === "password";
+    i.type = show ? "text" : "password";
+    pb.innerHTML = ic(show ? P.eyeoff : P.eye, 24, "#6b6b6b");
+    pb.setAttribute("aria-label", show ? "Hide password" : "Show password");
+  };
   const err = document.getElementById("err"), go = document.getElementById("go");
   document.getElementById("authForm").onsubmit = async ev => {
     ev.preventDefault(); err.textContent = ""; go.disabled = true; go.textContent = "Please wait…";
