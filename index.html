@@ -98,6 +98,12 @@ button{cursor:pointer;border:0;background:none}
 .prog{margin:0 16px 12px;height:8px;border-radius:4px;background:var(--soft);overflow:hidden}
 .prog div{height:100%;width:0;background:var(--blue);transition:width .2s}
 .pmedia{width:100%;max-height:70vh;object-fit:contain;background:#000;display:block;border-radius:24px}
+.fcard{margin:12px 16px;border-radius:28px;background:var(--card);padding:12px}
+.fhead{display:flex;align-items:center;gap:10px;padding:2px 4px 10px;width:100%;text-align:left;font-size:14px}
+.fav{width:38px;height:38px;border-radius:14px;background:var(--avatar);color:#fff;font-weight:700;display:flex;align-items:center;justify-content:center;overflow:hidden;flex:none}
+.fav img{width:100%;height:100%;object-fit:cover}
+.fmedia{width:100%;border-radius:20px;display:block;max-height:75vh;object-fit:cover;background:#000}
+.rescard{display:flex;align-items:center;gap:12px;margin:0 16px 10px;padding:12px;border-radius:22px;background:var(--card);width:calc(100% - 32px);text-align:left}
 .link{color:var(--blue);font-weight:700;font-size:14px;min-height:44px}
 .srow .tick{margin-left:auto}
 
@@ -115,7 +121,7 @@ button{cursor:pointer;border:0;background:none}
 import { initializeApp } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, sendPasswordResetEmail }
   from "https://www.gstatic.com/firebasejs/13.4.0/firebase-auth.js";
-import { getFirestore, doc, getDoc, getDocs, collection, query, where, writeBatch, serverTimestamp, increment }
+import { getFirestore, doc, getDoc, getDocs, collection, query, where, getCountFromServer, writeBatch, serverTimestamp, increment }
   from "https://www.gstatic.com/firebasejs/13.4.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -166,7 +172,12 @@ let pendingSlot = "";     // account whose session expired
 let prefill = "", notice = "";
 let prevSlot = "";        // when adding a second account
 let ready = false;
-let myPosts = null, postsUid = "", loadingPosts = false, curPost = null;
+let myPosts = null, postsUid = "", loadingPosts = false, curPost = null, postBack = "profile";
+let myFollowers = 0, followersUid = "";
+let feed = null, feedUid = "", feedLoading = false;
+let viewUser = null, viewPosts = [], viewFollowing = false, viewFollowers = 0, userLoading = false, backView = "home";
+let sq = "", sres = null;   // search text / result (null | "none" | profile)
+const profileCache = {};
 const $app = document.getElementById("app");
 
 /* ---------- helpers ---------- */
@@ -305,6 +316,57 @@ async function saveProfile({ name, username, bio, photo }) {
   upsertAcc(activeSlot, me);
 }
 
+/* ---------- people, follow, feed ---------- */
+async function getProfile(uid) {
+  if (uid === me.uid) return me;
+  if (profileCache[uid]) return profileCache[uid];
+  const p = await loadProfile(uid); if (p) profileCache[uid] = p; return p;
+}
+async function followerCount(uid) {
+  try { return (await getCountFromServer(query(collection(db, "follows"), where("followedUid", "==", uid)))).data().count; } catch { return 0; }
+}
+const followRef = uid => doc(db, "follows", me.uid + "_" + uid);
+async function isFollowing(uid) { return (await getDoc(followRef(uid))).exists(); }
+async function setFollow(uid, on) {
+  const b = writeBatch(db);
+  if (on) b.set(followRef(uid), { followerUid: me.uid, followedUid: uid, createdAt: serverTimestamp() });
+  else b.delete(followRef(uid));
+  await b.commit(); feed = null;
+}
+const byNewest = (a, b) => (b.createdAt?.seconds || 9e12) - (a.createdAt?.seconds || 9e12);
+async function loadFeed() {
+  if (feedLoading) return; feedLoading = true;
+  try {
+    const f = await getDocs(query(collection(db, "follows"), where("followerUid", "==", me.uid)));
+    const uids = [me.uid, ...f.docs.map(d => d.data().followedUid)].slice(0, 30);
+    const chunks = []; for (let i = 0; i < uids.length; i += 10) chunks.push(uids.slice(i, i + 10));
+    const snaps = await Promise.all(chunks.map(c => getDocs(query(collection(db, "posts"), where("uid", "in", c)))));
+    const posts = snaps.flatMap(s => s.docs.map(d => ({ id: d.id, ...d.data() }))).sort(byNewest).slice(0, 60);
+    await Promise.all([...new Set(posts.map(p => p.uid))].map(u => getProfile(u).catch(() => null)));
+    feed = posts;
+  } catch (e) { feed = []; toast(errMsg(e)); }
+  feedUid = me.uid; feedLoading = false;
+  if (view === "home") render();
+}
+async function openUser(uid) {
+  if (uid === me.uid) { view = "profile"; render(); window.scrollTo(0, 0); return; }
+  backView = view === "user" ? backView : view; userLoading = true; viewUser = null; view = "user"; render(); window.scrollTo(0, 0);
+  try {
+    const [p, posts, fol, cnt] = await Promise.all([
+      getProfile(uid), getDocs(query(collection(db, "posts"), where("uid", "==", uid))), isFollowing(uid), followerCount(uid)]);
+    if (!p) throw new Error("Account not found.");
+    viewUser = p; viewPosts = posts.docs.map(d => ({ id: d.id, ...d.data() })).sort(byNewest); viewFollowing = fol; viewFollowers = cnt;
+  } catch (e) { toast(errMsg(e)); userLoading = false; view = backView; return render(); }
+  userLoading = false; if (view === "user") render();
+}
+async function searchUser(q) {
+  q = q.trim().toLowerCase().replace(/^@/, "");
+  if (usernameProblem(q)) return "none";
+  const s = await getDoc(doc(db, "usernames", q));
+  if (!s.exists()) return "none";
+  return (await getProfile(s.data().uid)) || "none";
+}
+
 /* ---------- posts ---------- */
 function thumbUrl(p) {
   const u = p.mediaUrl;
@@ -357,7 +419,7 @@ async function createPost(file, caption, onProgress) {
   b.set(doc(db, "posts", id), post);
   b.update(doc(db, "users", me.uid), { postsCount: increment(1) });
   await b.commit();
-  me = { ...me, postsCount: (me.postsCount || 0) + 1 };
+  me = { ...me, postsCount: (me.postsCount || 0) + 1 }; feed = null;
   if (postsUid === me.uid && myPosts) myPosts.unshift({ id, ...post, createdAt: { seconds: Math.floor(Date.now() / 1000) } });
 }
 async function deletePost(p) {
@@ -365,7 +427,7 @@ async function deletePost(p) {
   b.delete(doc(db, "posts", p.id));
   b.update(doc(db, "users", me.uid), { postsCount: increment(-1) });
   await b.commit();
-  me = { ...me, postsCount: Math.max(0, (me.postsCount || 1) - 1) };
+  me = { ...me, postsCount: Math.max(0, (me.postsCount || 1) - 1) }; feed = null;
   if (myPosts) myPosts = myPosts.filter(x => x.id !== p.id);
 }
 async function loadMyPosts() {
@@ -374,6 +436,7 @@ async function loadMyPosts() {
     const snap = await getDocs(query(collection(db, "posts"), where("uid", "==", me.uid)));
     myPosts = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (b.createdAt?.seconds || 9e12) - (a.createdAt?.seconds || 9e12));
     postsUid = me.uid;
+    myFollowers = await followerCount(me.uid); followersUid = me.uid;
   } catch (e) { myPosts = []; postsUid = me.uid; toast(errMsg(e)); }
   loadingPosts = false;
   if (view === "profile") render();
@@ -420,7 +483,9 @@ function render() {
   if (view === "create") return renderCreate();
   if (view === "post" && curPost) return renderPost();
   if (view === "profile" && postsUid !== me.uid && !loadingPosts) loadMyPosts();
-  renderShell(view === "profile" ? profileHTML() : homeHTML());
+  if (view === "home" && (feed === null || feedUid !== me.uid) && !feedLoading) loadFeed();
+  if (view === "search") return renderSearch();
+  renderShell(view === "profile" ? profileHTML() : view === "user" ? userHTML() : homeHTML());
 }
 
 function accAvatar(a) { return a.photo ? `<img src="${a.photo}" alt="">` : esc((a.name || "?").charAt(0).toUpperCase()); }
@@ -501,15 +566,27 @@ function renderAuth() {
   };
 }
 
+function feedCard(p) {
+  const u = p.uid === me.uid ? me : profileCache[p.uid];
+  const av = u?.photo ? `<img src="${u.photo}" alt="">` : esc((p.username || "?").charAt(0).toUpperCase());
+  const media = p.mediaType === "video"
+    ? `<video class="fmedia" src="${p.mediaUrl}" poster="${thumbUrl(p)}" controls playsinline preload="none"></video>`
+    : `<img class="fmedia" src="${bigUrl(p)}" alt="Post by ${esc(p.username)}" loading="lazy">`;
+  return `<article class="fcard">
+    <button class="fhead" data-user="${p.uid}"><span class="fav">${av}</span><span><b>${esc(p.username)}</b><br><span class="muted" style="font-size:12px">${postDate(p)}</span></span></button>
+    ${media}
+    ${p.caption ? `<p style="font-size:15px;line-height:22px;margin:12px 4px 4px;white-space:pre-wrap"><b>${esc(p.username)}</b> ${esc(p.caption)}</p>` : ""}
+  </article>`;
+}
 function homeHTML() {
-  return `
-  <div class="top"><div class="brand"><img src="logo.png" alt="">Zoc</div></div>
-  <div class="card center">
-    <div class="avatar">${avatarHTML(me)}</div>
-    <div class="title">Welcome, ${esc(me.name)}</div>
-    <p class="muted" style="font-size:14px;line-height:21px">Your feed will appear here once posts are added in the next step.</p>
-    <button class="btn primary" data-go="edit">Edit profile</button>
-  </div>`;
+  let body;
+  if (feed === null || feedUid !== me.uid) body = `<p class="center muted" style="margin-top:40px">Loading…</p>`;
+  else if (!feed.length) body = `<div class="card center"><div class="title">Nothing here yet</div>
+      <p class="muted" style="font-size:14px;line-height:21px">Share your first post, or find people and follow them to fill your feed.</p>
+      <button class="btn primary" data-go="create" style="margin-bottom:10px">New post</button>
+      <button class="btn soft" data-go="search">Find people</button></div>`;
+  else body = feed.map(feedCard).join("");
+  return `<div class="top"><div class="brand"><img src="logo.png" alt="">Zoc</div></div>${body}`;
 }
 
 function profileHTML() {
@@ -521,10 +598,56 @@ function profileHTML() {
     <div class="title" style="font-size:20px">${esc(me.name)}</div>
     <div class="muted" style="font-size:13px;margin:4px 0">@${esc(me.username)}</div>
     <div style="font-size:14px;line-height:21px;margin-top:8px;white-space:pre-wrap">${me.bio ? esc(me.bio) : '<span class="muted">No bio yet</span>'}</div>
-    <div class="stats"><div><b>${me.postsCount || 0}</b>Posts</div><div><b>${me.followersCount || 0}</b>Followers</div></div>
+    <div class="stats"><div><b>${me.postsCount || 0}</b>Posts</div><div><b>${followersUid === me.uid ? myFollowers : "–"}</b>Followers</div></div>
   </div>
   <div style="padding:0 16px"><button class="btn primary" data-go="edit">Edit profile</button></div>
   ${gridHTML()}`;
+}
+
+function userHTML() {
+  const back = `<button class="iconbtn" data-back aria-label="Back">${ic(P.back)}</button>`;
+  if (userLoading || !viewUser) return `<div class="top">${back}</div><p class="center muted" style="margin-top:40px">Loading…</p>`;
+  const u = viewUser;
+  const tiles = viewPosts.map(p => `<button class="tile ph" data-vpost="${p.id}" aria-label="Open post"><img src="${thumbUrl(p)}" alt="">${p.mediaType === "video" ? `<span class="vid">${ic('<path d="M8 5v14l11-7z"/>', 16, "#ffffff")}</span>` : ""}</button>`).join("");
+  return `
+  <div class="top">${back}<div class="title">@${esc(u.username)}</div><span style="width:44px"></span></div>
+  <div class="card center">
+    <div class="avatar">${avatarHTML(u)}</div>
+    <div class="title" style="font-size:20px">${esc(u.name)}</div>
+    <div class="muted" style="font-size:13px;margin:4px 0">@${esc(u.username)}</div>
+    <div style="font-size:14px;line-height:21px;margin-top:8px;white-space:pre-wrap">${u.bio ? esc(u.bio) : ""}</div>
+    <div class="stats"><div><b>${u.postsCount || 0}</b>Posts</div><div><b>${viewFollowers}</b>Followers</div></div>
+  </div>
+  <div class="row" style="gap:10px;padding:0 16px">
+    <button class="btn ${viewFollowing ? "soft" : "primary"}" id="followBtn">${viewFollowing ? "Following" : "Follow"}</button>
+    <button class="btn soft" id="msgBtn">Message</button>
+  </div>
+  <div class="grid">${tiles}</div>
+  ${viewPosts.length ? "" : `<p class="center muted" style="font-size:13px">No posts yet.</p>`}`;
+}
+
+function renderSearch() {
+  renderShell(`
+  <div class="top"><div class="title">Search</div></div>
+  <form id="sForm" style="margin:8px 16px;display:flex;gap:8px">
+    <label class="field" style="flex:1;margin:0"><input id="sQ" placeholder="Type the exact username" aria-label="Username" autocapitalize="none" autocomplete="off" value="${esc(sq)}"></label>
+    <button class="iconbtn" style="width:54px;height:54px;border-radius:20px;background:var(--blue)" aria-label="Search">${ic(P.search, 24, "#ffffff")}</button>
+  </form>
+  <div id="sRes"></div>`);
+  const showRes = () => {
+    const r = document.getElementById("sRes");
+    if (sres === null) r.innerHTML = `<p class="center muted" style="font-size:13px;padding:0 24px">Find people by their username.</p>`;
+    else if (sres === "none") r.innerHTML = `<p class="center muted" style="font-size:14px;padding:0 24px">No account with that username.</p>`;
+    else r.innerHTML = `<button class="rescard" data-user="${sres.uid}"><span class="fav" style="width:52px;height:52px;border-radius:18px;font-size:22px">${sres.photo ? `<img src="${sres.photo}" alt="">` : esc((sres.name || "?").charAt(0).toUpperCase())}</span><span style="font-size:15px"><b>${esc(sres.name)}</b><br><span class="muted" style="font-size:13px">@${esc(sres.username)}${sres.uid === me.uid ? " · you" : ""}</span></span></button>`;
+    r.querySelectorAll("[data-user]").forEach(b => b.onclick = () => openUser(b.dataset.user));
+  };
+  showRes();
+  document.getElementById("sForm").onsubmit = async e => {
+    e.preventDefault(); sq = document.getElementById("sQ").value;
+    if (!sq.trim()) return;
+    try { sres = await searchUser(sq); } catch (x) { toast(errMsg(x)); return; }
+    showRes();
+  };
 }
 
 function gridHTML() {
@@ -539,14 +662,24 @@ function renderShell(inner) {
   $app.innerHTML = inner + `
   <nav class="nav" aria-label="Main">
     <button data-go="home" aria-label="Home">${ic(P.home, 26, on("home"))}</button>
-    <button data-soon aria-label="Search">${ic(P.search, 26, "#111111")}</button>
+    <button data-go="search" aria-label="Search">${ic(P.search, 26, on("search"))}</button>
     <button class="plus" data-go="create" aria-label="Create">${ic(P.plus, 24, "#ffffff")}</button>
     <button data-soon aria-label="Chats">${ic(P.chat, 26, "#111111")}</button>
     <button data-go="profile" aria-label="Profile"><span class="mini">${me.photo ? `<img src="${me.photo}" alt="">` : ""}</span></button>
   </nav>`;
   $app.querySelectorAll("[data-go]").forEach(b => b.onclick = () => { view = b.dataset.go; render(); window.scrollTo(0, 0); });
   $app.querySelectorAll("[data-soon]").forEach(b => b.onclick = () => toast("Coming in the next step"));
-  $app.querySelectorAll("[data-post]").forEach(b => b.onclick = () => { curPost = myPosts.find(p => p.id === b.dataset.post); view = "post"; render(); window.scrollTo(0, 0); });
+  $app.querySelectorAll("[data-post]").forEach(b => b.onclick = () => { curPost = myPosts.find(p => p.id === b.dataset.post); postBack = "profile"; view = "post"; render(); window.scrollTo(0, 0); });
+  $app.querySelectorAll("[data-vpost]").forEach(b => b.onclick = () => { curPost = viewPosts.find(p => p.id === b.dataset.vpost); postBack = "user"; view = "post"; render(); window.scrollTo(0, 0); });
+  $app.querySelectorAll("[data-user]").forEach(b => b.onclick = () => openUser(b.dataset.user));
+  $app.querySelectorAll("[data-back]").forEach(b => b.onclick = () => { view = backView || "home"; render(); });
+  const fb = document.getElementById("followBtn");
+  if (fb) fb.onclick = async () => {
+    fb.disabled = true; const want = !viewFollowing;
+    try { await setFollow(viewUser.uid, want); viewFollowing = want; viewFollowers += want ? 1 : -1; render(); }
+    catch (e) { toast(errMsg(e)); fb.disabled = false; }
+  };
+  const mb = document.getElementById("msgBtn"); if (mb) mb.onclick = () => toast("Messages are coming in the next step");
   const m = document.getElementById("menuBtn"); if (m) m.onclick = openMenu;
 }
 
@@ -631,17 +764,17 @@ function renderPost() {
     ${mine ? `<button class="iconbtn" id="del" aria-label="Delete post">${ic(P.trash, 24, "#c5221f")}</button>` : `<span style="width:44px"></span>`}
   </div>
   <div style="margin:8px 16px">
-    <div class="row" style="gap:10px;margin:0 4px 12px"><div class="mini" style="width:38px;height:38px;border-radius:14px">${me.photo && mine ? `<img src="${me.photo}" alt="">` : ""}</div>
+    <div class="row" style="gap:10px;margin:0 4px 12px"><div class="fav">${(() => { const au = mine ? me : profileCache[p.uid]; return au?.photo ? `<img src="${au.photo}" alt="">` : esc((p.username || "?").charAt(0).toUpperCase()); })()}</div>
       <div style="font-size:14px"><b>${esc(p.username)}</b><br><span class="muted" style="font-size:12px">${postDate(p)}</span></div></div>
     ${p.mediaType === "video" ? `<video class="pmedia" src="${p.mediaUrl}" controls playsinline preload="metadata"></video>` : `<img class="pmedia" src="${bigUrl(p)}" alt="Post by ${esc(p.username)}">`}
     ${p.caption ? `<p style="font-size:15px;line-height:22px;margin:14px 4px;white-space:pre-wrap"><b>${esc(p.username)}</b> ${esc(p.caption)}</p>` : ""}
   </div>`;
-  document.getElementById("back").onclick = () => { view = "profile"; render(); };
+  document.getElementById("back").onclick = () => { view = postBack || "profile"; render(); };
   const d = document.getElementById("del");
   if (d) d.onclick = async () => {
     if (!confirm("Delete this post?")) return;
     d.disabled = true;
-    try { await deletePost(p); toast("Post deleted"); view = "profile"; render(); } catch (e) { toast(errMsg(e)); d.disabled = false; }
+    try { await deletePost(p); toast("Post deleted"); if (viewPosts) viewPosts = viewPosts.filter(x => x.id !== p.id); view = "profile"; render(); } catch (e) { toast(errMsg(e)); d.disabled = false; }
   };
 }
 
